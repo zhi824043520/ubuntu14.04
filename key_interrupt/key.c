@@ -29,6 +29,7 @@ static const struct file_operations key_fops = {
 	.owner		= THIS_MODULE,
 };
 
+// ÷–∂œ¥¶¿Ì
 static irqreturn_t key_irq(int irq, void *dev_id)
 {
 	printk("This is key_irq: %d.\n", irq);
