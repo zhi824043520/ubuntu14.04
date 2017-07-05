@@ -4,11 +4,14 @@
 #include <linux/kernel.h>
 #include <linux/of_irq.h>
 #include <linux/device.h>
+#include <linux/sched.h>
 #include <linux/init.h>
 #include <linux/slab.h>
+#include <linux/wait.h>
 #include <linux/fs.h>
 #include <linux/of.h>
 
+#include <asm/uaccess.h>
 #include <asm/irq.h>
 #include <asm/io.h>
 
@@ -16,28 +19,63 @@
 #define DEVICE_NAME "key"
 
 static struct key_t {
+	wait_queue_head_t wait_queue;
 	struct device_node *key_node;
 	struct	device* key_device;
 	struct 	class* key_class;	
 	void __iomem *gpx1bass;
 	struct resource io;
-	int 	major;
+	int wake_flag;
 	int irq_nr;
+	int major;
+	int flag;
 } *key;
+
+int key_open(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static ssize_t key_read(struct file *file, char __user *user_buf, size_t count, loff_t *ppos)
+{
+	if ((key->flag == 0) && (file->f_flags & O_NONBLOCK)) {	// 按键没有按下
+		return -ETXTBSY;
+	}
+	wait_event_interruptible(key->wait_queue, key->wake_flag);
+	//copy_to_user(user_buf, &key->flag, 4);
+	put_user(key->flag, user_buf);
+	
+	key->wake_flag = 0;
+
+	
+	return 0;
+}
 
 static const struct file_operations key_fops = {
 	.owner		= THIS_MODULE,
+	.open		= key_open,
+	.read		= key_read,
 };
 
 // 中断处理
 static irqreturn_t key_irq(int irq, void *dev_id)
 {
-	printk("This is key_irq: %d.\n", irq);
+	wake_up_interruptible(&key->wait_queue);
+	key->wake_flag = 1;
+	
+	if ((readl(key->gpx1bass + 4)&0x2) >> 1 == 0x1) {
+		key->flag = 0;
+		//printk("IRQF_TRIGGER_HIGH.\n");
+	} else {
+		key->flag = 1;
+		//printk("IRQF_TRIGGER_LOW.\n");
+	}
+	//printk("This is key_irq: %d.\n", irq);
 	
 	return IRQ_HANDLED;
 }
 
-static int __init key_init(void)
+static int __init my_key_init(void)
 {
 	unsigned int reg;
 	int ret;
@@ -47,6 +85,9 @@ static int __init key_init(void)
 		printk("kzmalloc is error.\n");
 		goto out1;
 	}
+	
+	key->wake_flag = 0;
+	init_waitqueue_head(&key->wait_queue);
 	
 	key->major = register_chrdev(0, DEVICE_NAME, &key_fops);
 	if (key->major < 0) {
@@ -82,7 +123,7 @@ static int __init key_init(void)
 	reg |= (0xf << 4);
 	writel(reg, key->gpx1bass);
 	
-	ret = request_irq(key->irq_nr, key_irq, IRQF_TRIGGER_FALLING, "key_irq", NULL);
+	ret = request_irq(key->irq_nr, key_irq, IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING, "key_irq", NULL);
 	if (ret < 0) {
 		printk("request_irq is error.\n");
 		goto out5;
@@ -106,7 +147,7 @@ out1:
 	
 }
 
-static void __exit ket_exit(void)
+static void __exit my_ket_exit(void)
 {
 	free_irq(key->irq_nr, NULL);
 	iounmap(key->gpx1bass);
@@ -118,7 +159,7 @@ static void __exit ket_exit(void)
 	printk("ket_exit.\n");
 }
 
-module_init(key_init);
-module_exit(ket_exit);
+module_init(my_key_init);
+module_exit(my_ket_exit);
 
 MODULE_LICENSE("GPL");

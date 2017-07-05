@@ -12,8 +12,7 @@ modules_install:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules_install
 
 app:
-	$(BUILD) -o app1.elf app1.c
-	$(BUILD) -o app2.elf app2.c
+	$(BUILD) -o app.elf key_app.c
 
 cp:
 	cp *.ko ~/lzh/rootfs/rootfs_fst/root/
