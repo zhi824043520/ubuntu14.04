@@ -23,7 +23,7 @@ static struct key_t {
 	struct device_node *key_node;
 	struct	device* key_device;
 	struct 	class* key_class;
-	struct tasklet_struct t;	
+	struct work_struct w;	
 	void __iomem *gpx1bass;
 	struct resource io;
 	int wake_flag;
@@ -52,9 +52,9 @@ static const struct file_operations key_fops = {
 	.read		= key_read,
 };
 
-void do_taskle(unsigned long argv)
+static void do_work(struct work_struct *work)
 {
-	printk("This is do_taskle.\n");
+	printk("This is do_work.\n");
 	
 	if ((readl(key->gpx1bass + 4)&0x2) >> 1 == 0x1) {
 		key->flag = 0;
@@ -69,7 +69,7 @@ static irqreturn_t key_irq(int irq, void *dev_id)
 	wake_up_interruptible(&key->wait_queue);
 	key->wake_flag = 1;
 	
-	tasklet_schedule(&key->t);
+	schedule_work(&key->w);
 	
 	return IRQ_HANDLED;
 }
@@ -88,7 +88,7 @@ static int __init my_key_init(void)
 	key->wake_flag = 0;
 	init_waitqueue_head(&key->wait_queue);
 	
-	tasklet_init(&key->t, do_taskle, 0);
+	INIT_WORK(&key->w, do_work);
 	
 	key->major = register_chrdev(0, DEVICE_NAME, &key_fops);
 	if (key->major < 0) {
