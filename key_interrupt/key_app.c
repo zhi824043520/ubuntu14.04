@@ -9,8 +9,8 @@ int main(int argc, char *argv[])
 	int ret = 0;
 	int buf = 0;
 	
-	fd = open("/dev/key", O_RDWR|O_NONBLOCK);
-	//fd = open("/dev/key", O_RDWR);
+	//fd = open("/dev/key", O_RDWR|O_NONBLOCK);
+	fd = open("/dev/key", O_RDWR);
 	if (fd < 0) {
 		perror("open");
 	}
@@ -18,12 +18,15 @@ int main(int argc, char *argv[])
 	while (1) {
 		ret = read(fd, &buf, sizeof(buf));
 		if (ret < 0) {
-			// printf("error.\n");
 			perror("open");
 			return -1;
 		}
 		
-		printf("hight %d.\n", buf);
+		if (buf == 0) {
+			printf("This is key down.\n");
+		} else {
+			printf("This is key up.\n");
+		}
 	}
 	
 	return 0;

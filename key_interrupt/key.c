@@ -22,7 +22,8 @@ static struct key_t {
 	wait_queue_head_t wait_queue;
 	struct device_node *key_node;
 	struct	device* key_device;
-	struct 	class* key_class;	
+	struct 	class* key_class;
+	struct tasklet_struct t;	
 	void __iomem *gpx1bass;
 	struct resource io;
 	int wake_flag;
@@ -30,11 +31,6 @@ static struct key_t {
 	int major;
 	int flag;
 } *key;
-
-int key_open(struct inode *inode, struct file *file)
-{
-	return 0;
-}
 
 static ssize_t key_read(struct file *file, char __user *user_buf, size_t count, loff_t *ppos)
 {
@@ -53,9 +49,19 @@ static ssize_t key_read(struct file *file, char __user *user_buf, size_t count, 
 
 static const struct file_operations key_fops = {
 	.owner		= THIS_MODULE,
-	.open		= key_open,
 	.read		= key_read,
 };
+
+void do_taskle(unsigned long argv)
+{
+	printk("This is do_taskle.\n");
+	
+	if ((readl(key->gpx1bass + 4)&0x2) >> 1 == 0x1) {
+		key->flag = 0;
+	} else {
+		key->flag = 1;
+	}
+}
 
 // ÖÐ¶Ï´¦Àí
 static irqreturn_t key_irq(int irq, void *dev_id)
@@ -63,14 +69,7 @@ static irqreturn_t key_irq(int irq, void *dev_id)
 	wake_up_interruptible(&key->wait_queue);
 	key->wake_flag = 1;
 	
-	if ((readl(key->gpx1bass + 4)&0x2) >> 1 == 0x1) {
-		key->flag = 0;
-		//printk("IRQF_TRIGGER_HIGH.\n");
-	} else {
-		key->flag = 1;
-		//printk("IRQF_TRIGGER_LOW.\n");
-	}
-	//printk("This is key_irq: %d.\n", irq);
+	tasklet_schedule(&key->t);
 	
 	return IRQ_HANDLED;
 }
@@ -88,6 +87,8 @@ static int __init my_key_init(void)
 	
 	key->wake_flag = 0;
 	init_waitqueue_head(&key->wait_queue);
+	
+	tasklet_init(&key->t, do_taskle, 0);
 	
 	key->major = register_chrdev(0, DEVICE_NAME, &key_fops);
 	if (key->major < 0) {
