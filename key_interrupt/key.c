@@ -23,6 +23,7 @@ static struct key_t {
 	struct device_node *key_node;
 	struct	device* key_device;
 	struct 	class* key_class;
+	struct timer_list timer;
 	struct tasklet_struct t;	
 	void __iomem *gpx1bass;
 	struct resource io;
@@ -74,6 +75,13 @@ static irqreturn_t key_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+void do_time(unsigned long n)
+{
+	printk("do_time.\n");
+	
+	mod_timer(&key->timer, jiffies + HZ);
+}
+
 static int __init my_key_init(void)
 {
 	unsigned int reg;
@@ -89,6 +97,13 @@ static int __init my_key_init(void)
 	init_waitqueue_head(&key->wait_queue);
 	
 	tasklet_init(&key->t, do_taskle, 0);
+	
+	init_timer(&key->timer);
+	
+	key->timer.function = do_time;
+	key->timer.expires = jiffies + HZ;
+	
+	add_timer(&key->timer);
 	
 	key->major = register_chrdev(0, DEVICE_NAME, &key_fops);
 	if (key->major < 0) {
@@ -150,6 +165,7 @@ out1:
 
 static void __exit my_ket_exit(void)
 {
+	del_timer(&key->timer);
 	free_irq(key->irq_nr, NULL);
 	iounmap(key->gpx1bass);
 	device_destroy(key->key_class, MKDEV(key->major, 0));
