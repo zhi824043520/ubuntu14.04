@@ -38,7 +38,6 @@ static ssize_t key_read(struct file *file, char __user *user_buf, size_t count, 
 		return -ETXTBSY;
 	}
 	wait_event_interruptible(key->wait_queue, key->wake_flag);
-	//copy_to_user(user_buf, &key->flag, 4);
 	put_user(key->flag, user_buf);
 	
 	key->wake_flag = 0;
@@ -76,12 +75,9 @@ static irqreturn_t key_irq(int irq, void *dev_id)
 	
 	if ((readl(key->gpx1bass + 4)&0x2) >> 1 == 0x1) {
 		key->flag = 0;
-		//printk("IRQF_TRIGGER_HIGH.\n");
 	} else {
 		key->flag = 1;
-		//printk("IRQF_TRIGGER_LOW.\n");
 	}
-	//printk("This is key_irq: %d.\n", irq);
 	
 	return IRQ_HANDLED;
 }
