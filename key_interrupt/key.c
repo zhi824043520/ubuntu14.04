@@ -19,6 +19,7 @@
 #define DEVICE_NAME "key"
 
 static struct key_t {
+	struct fasync_struct *key_async_queue;
 	wait_queue_head_t wait_queue;
 	struct device_node *key_node;
 	struct	device* key_device;
@@ -30,11 +31,6 @@ static struct key_t {
 	int major;
 	int flag;
 } *key;
-
-int key_open(struct inode *inode, struct file *file)
-{
-	return 0;
-}
 
 static ssize_t key_read(struct file *file, char __user *user_buf, size_t count, loff_t *ppos)
 {
@@ -51,10 +47,15 @@ static ssize_t key_read(struct file *file, char __user *user_buf, size_t count, 
 	return 0;
 }
 
+static int key_fasync(int fd, struct file *filp, int on)
+{
+	return fasync_helper(fd, filp, on, &key->key_async_queue); 
+}
+
 static const struct file_operations key_fops = {
 	.owner		= THIS_MODULE,
-	.open		= key_open,
 	.read		= key_read,
+	.fasync  	= key_fasync,
 };
 
 // ÖÐ¶Ï´¦Àí
@@ -65,12 +66,11 @@ static irqreturn_t key_irq(int irq, void *dev_id)
 	
 	if ((readl(key->gpx1bass + 4)&0x2) >> 1 == 0x1) {
 		key->flag = 0;
-		//printk("IRQF_TRIGGER_HIGH.\n");
 	} else {
 		key->flag = 1;
-		//printk("IRQF_TRIGGER_LOW.\n");
 	}
-	//printk("This is key_irq: %d.\n", irq);
+	
+	kill_fasync(&key->key_async_queue, SIGIO, 0);
 	
 	return IRQ_HANDLED;
 }
