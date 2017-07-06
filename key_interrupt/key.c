@@ -8,6 +8,7 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/wait.h>
+#include <linux/poll.h>
 #include <linux/fs.h>
 #include <linux/of.h>
 
@@ -31,11 +32,6 @@ static struct key_t {
 	int flag;
 } *key;
 
-int key_open(struct inode *inode, struct file *file)
-{
-	return 0;
-}
-
 static ssize_t key_read(struct file *file, char __user *user_buf, size_t count, loff_t *ppos)
 {
 	if ((key->flag == 0) && (file->f_flags & O_NONBLOCK)) {	// 按键没有按下
@@ -51,10 +47,25 @@ static ssize_t key_read(struct file *file, char __user *user_buf, size_t count, 
 	return 0;
 }
 
+static unsigned int key_poll(struct file *file, poll_table *wait)
+{
+	static unsigned int mask = 0;
+	
+	poll_wait(file, &key->wait_queue, wait);
+	
+	if (key->flag == 1) {
+		mask = POLLIN;
+	} else {
+		mask = 0;
+	}
+	
+	return mask;
+}
+
 static const struct file_operations key_fops = {
 	.owner		= THIS_MODULE,
-	.open		= key_open,
 	.read		= key_read,
+	.poll		= key_poll,
 };
 
 // 中断处理

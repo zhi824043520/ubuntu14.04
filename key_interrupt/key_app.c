@@ -18,18 +18,21 @@ int main(int argc, char *argv[])
 		{.fd = 0,
 		 .events = POLLIN},
 	};
-	
 
 	
 	while (1) {
 		ret = poll(pollfd, 2, -1);
-		if (ret < 0) {
+		if (ret > 0) {
+			printf("revents: %d.\n", pollfd[0].revents);
+			printf("POLLIN: %d.\n", POLLIN);
 			if (pollfd[0].revents == POLLIN) {
+				printf("start\n");
 				read(pollfd[0].fd, &val, sizeof(val));
+				printf("end\n");
 				
 				if (val == 1) {
 					printf("key is down.\n");
-				} else {
+				} else if (val == 0) {
 					printf("key is up.\n");
 				}
 			}
@@ -37,29 +40,10 @@ int main(int argc, char *argv[])
 			if (pollfd[1].revents == POLLIN) {
 				fgets(buf, 128, stdin);
 				
-				printf("input is: %s.\n", buf);
+				printf("input is: %s.", buf);
 			}
 		}
 	}
-	
-#if 0
-	fd = open("/dev/key", O_RDWR|O_NONBLOCK);
-	//fd = open("/dev/key", O_RDWR);
-	if (fd < 0) {
-		perror("open");
-	}
-
-	while (1) {
-		ret = read(fd, &buf, sizeof(buf));
-		if (ret < 0) {
-			// printf("error.\n");
-			perror("open");
-			return -1;
-		}
-		
-		printf("hight %d.\n", buf);
-	}
-#endif
 	
 	return 0;
 }
