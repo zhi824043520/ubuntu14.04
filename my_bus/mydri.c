@@ -1,3 +1,4 @@
+#include <linux/platform_device.h>
 #include <linux/of_address.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -12,40 +13,49 @@
 #include <asm/uaccess.h>
 #include <asm/io.h>
 
-extern struct bus_type bus;
+struct resource* res;
 
-static int my_probe(struct device *dev)
+static int drv_probe(struct platform_device *dev)
 {
-	printk("my_probe.\n");
+	res = platform_get_resource(dev, IORESOURCE_IRQ, 0);
+	printk("irq number is %d.\n", res->start);
+	printk("drv_probe.\n");
 	
 	return 0;
 }
 
-static int my_remove(struct device *dev)
+static int drv_remove(struct platform_device *dev)
 {
-	printk("my_remove.\n");
+	printk("drv_remove.\n");
 	
 	return 0;
 }
 
-struct device_driver drv = {
-	.name 	= 	"my_test_dev",
-	.bus 	= 	&bus,
-	.probe	= 	my_probe,
-	.remove =	my_remove,
+static const struct of_device_id key_of_ids[] = {
+	{ .compatible = "fs4412,keys" },
+	{},
+};
+
+static struct platform_driver pdrv = {
+	.driver = {
+		.name = "platform",
+		.of_match_table = key_of_ids,
+	},
+	.probe = drv_probe,
+	.remove = drv_remove,
 };
 
 static int __init my_dri_init(void)
 {
 	int ret = 0;
 	
-	ret = driver_register(&drv);
+	ret = platform_driver_register(&pdrv);
 	return 0;
 }
 
 static void __exit my_dri_exit(void)
 {
-	driver_unregister(&drv);
+	platform_driver_unregister(&pdrv);
 }
 
 module_init(my_dri_init);
