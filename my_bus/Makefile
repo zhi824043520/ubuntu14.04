@@ -26,6 +26,6 @@ clean:
 .PHONY: modules modules_install clean
 
 else
-	obj-m += mybus.o mydri.o mydev.o
+	obj-m += mydri.o
 
 endif
