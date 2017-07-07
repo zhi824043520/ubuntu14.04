@@ -21,12 +21,11 @@ static void dev_release(struct device *dev)
 }
 
 static struct platform_device pdev = {
-	.name = "my platform",
+	.name = "my-platform",
 	.dev = {
 		.release = dev_release,
 	},
 };
-
 
 static int __init my_dev_init(void)
 {

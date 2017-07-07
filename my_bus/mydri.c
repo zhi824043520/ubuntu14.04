@@ -27,17 +27,25 @@ static int drv_remove(struct platform_device *dev)
 	return 0;
 }
 
+static const struct platform_device_id plat_id_table[] = {
+	{ .name		= "my-platform", },
+	{ }
+};
+
 static struct platform_driver pdrv = {
 	.driver = {
-		.name = "my platform",
+		.name = "platform",
 	},
 	.probe = drv_probe,
 	.remove = drv_remove,
+	.id_table = plat_id_table,
 };
 
 static int __init my_dri_init(void)
 {
 	int ret = 0;
+	
+	
 	
 	ret = platform_driver_register(&pdrv);
 	return 0;
