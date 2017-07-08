@@ -19,45 +19,109 @@
 
 #define NAME "mykeys"
 
+#define KEY2_UP		0
+#define KEY2_DOWN 	1
+#define KEY3_UP		0
+#define KEY3_DOWN 	1
+
 struct keys_dtb_t {
 	struct resource *irq_nr[2];
 	struct resource *reg;
 };
 
 static struct keys_t {
-	wait_queue_head_t wait_queue;
+	struct fasync_struct *keys_fasync_queue[2];
+	wait_queue_head_t wait_queue[2];
 	struct device *keys_device;
 	struct keys_dtb_t keys_dtb;
 	struct class *keys_class;
+	int key2_flag, key3_flag;
 	void __iomem *gpx1base;
 	int wake_flag;
 	int dev_nr;
+	int stat[2];
+	
 } *keys;
 
-static ssize_t keys_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
+static ssize_t keys_read(struct file *file, char __user *user_buf, size_t count, loff_t *ppos)
 {
+	if (MINOR(file->f_inode->i_rdev) == 0) {
+		//printk("key2.\n");
+		if ((keys->key2_flag == 0) && (file->f_flags & O_NONBLOCK)) {	// 按键没有按下
+			return -ETXTBSY;
+		}
+		wait_event_interruptible(keys->wait_queue[0], keys->wake_flag);
+		
+		if (keys->stat[0] == KEY2_UP || keys->stat[0] == KEY2_DOWN) {
+			put_user(keys->stat[0], user_buf);
+		}
+		
+	} else if (MINOR(file->f_inode->i_rdev) == 1) {
+		//printk("key3.\n");
+		if ((keys->key3_flag == 0) && (file->f_flags & O_NONBLOCK)) {	// 按键没有按下
+			return -ETXTBSY;
+		}
+		wait_event_interruptible(keys->wait_queue[1], keys->wake_flag);
+		
+		if (keys->stat[1] == KEY3_UP || keys->stat[1] == KEY3_DOWN) {
+			put_user(keys->stat[1], user_buf);
+		}
+	}
+	
+	keys->wake_flag = 0;
 	
 	return 0;
 }
 
-static struct file_operations keys_fops = {
-	.owner			= THIS_MODULE,
+static int keys_fasync (int fd, struct file *file, int on)
+{
+	if (MINOR(file->f_inode->i_rdev) == 0) {
+		return fasync_helper(fd, file, on, &keys->keys_fasync_queue[0]);
+	} else if (MINOR(file->f_inode->i_rdev) == 1) {
+		return fasync_helper(fd, file, on, &keys->keys_fasync_queue[1]);
+	}
 	
-	.read = keys_read,
-	//.release		= keys_close,
+	return -1;
+}
+
+static struct file_operations keys_fops = {
+	.owner	= THIS_MODULE,
+	
+	.read 	= keys_read,
+	.fasync = keys_fasync,
 };
 
 static irqreturn_t do_keys_irq(int irq, void *dev_id)
-{
+{	
 	switch (irq) {
 		case 168:
-			printk("irq_nr = %d.\n", irq);
+		wake_up_interruptible(&keys->wait_queue[0]);
+		if ((readl(keys->gpx1base + 4)&0x2) >> 1 == 0x1) {
+			keys->stat[0] = KEY2_UP;
+			keys->key2_flag = 0;
+		} else {
+			keys->stat[0] = KEY2_DOWN;
+			keys->key2_flag = 1;
+		}
+		kill_fasync(&keys->keys_fasync_queue[0], SIGIO, 0);
+			//printk("irq_nr = %d.\n", irq);
 		break;
 		
 		case 169:
-			printk("irq_nr = %d.\n", irq);
+		wake_up_interruptible(&keys->wait_queue[1]);
+		if ((readl(keys->gpx1base + 4)&0x3) >> 2 == 0x1) {
+			keys->stat[1] = KEY3_UP;
+			keys->key3_flag = 0;
+		} else {
+			keys->stat[1] = KEY3_DOWN;
+			keys->key3_flag = 1;
+		}
+		kill_fasync(&keys->keys_fasync_queue[1], SIGIO, 0);
+			//printk("irq_nr = %d.\n", irq);
 		break;
 	}
+	
+	keys->wake_flag = 1;
 	
 	return IRQ_HANDLED;
 }
@@ -76,7 +140,8 @@ static int keys_probe(struct platform_device *pdev)
 	}
 	
 	//keys->wake_flag = 1;
-	//init_waitqueue_head(&keys->wait_queue);
+	init_waitqueue_head(&keys->wait_queue[0]);
+	init_waitqueue_head(&keys->wait_queue[1]);
 	
 	keys->dev_nr = register_chrdev(0, NAME, &keys_fops);
 	if (keys->dev_nr <= 0) {
@@ -124,7 +189,6 @@ static int keys_probe(struct platform_device *pdev)
 
 static int keys_remove(struct platform_device *pdev)
 {
-
 	int i = 0;
 
 	free_irq(keys->keys_dtb.irq_nr[0]->start, NULL);
