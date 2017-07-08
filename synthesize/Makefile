@@ -26,6 +26,6 @@ clean:
 .PHONY: modules modules_install clean
 
 else
-	obj-m += led.o
+	obj-m += led.o keys.o
 
 endif
